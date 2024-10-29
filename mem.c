@@ -142,7 +142,7 @@ void *Splice_block(const int nbytes)
     p->next = NULL;
 
     // so the problem is that p is still part of the list some how
-
+ 
     
     custom_validate();
     assert((p->size_units-1)*sizeof(mem_chunk_t) >= nbytes);
