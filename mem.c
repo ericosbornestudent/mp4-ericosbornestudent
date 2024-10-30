@@ -97,7 +97,40 @@ void Mem_free(void *return_ptr)
        return_ptr_chunk->next = previous_rover_next;
     } else {
         // step 1: loop to find before and after location
-        // step 2: insert between before and after and coalesce if possible
+        mem_chunk_t *original_rover_position = Rover;
+        mem_chunk_t *inserted_block = (void*)return_ptr - sizeof(mem_chunk_t);
+        Rover = Rover->next;
+        do{
+            if(Rover <= inserted_block && (inserted_block < Rover->next || Rover->size_units == 0))
+            {
+                // step 2: insert between before and after and coalesce if possible
+                // check if we can combine with the left block
+                if(((void*)Rover + (Rover->size_units * sizeof(mem_chunk_t)) == inserted_block))
+                {
+                    Rover->size_units = Rover->size_units + inserted_block->size_units;
+                    // check if we need to combine this new combined block with the left block
+                    if(((void*)inserted_block+(inserted_block->size_units*sizeof(mem_chunk_t)) == (void*)Rover->next))
+                    {
+                        Rover->size_units = Rover->size_units + Rover->next->size_units;
+                        Rover->next = Rover->next->next;
+                    }
+                }else{
+                    // check if we can combine our block with the one on the right
+                    if(((void*)inserted_block+(inserted_block->size_units*sizeof(mem_chunk_t)) == (void*)Rover->next))
+                    {
+                        inserted_block->size_units = inserted_block->size_units + Rover->next->size_units;
+                        inserted_block->next = Rover->next->next;
+                        Rover->next = inserted_block;
+                    }else{
+                        // this means we couldn't combine any blocks so we just insert it in the lsit
+                        inserted_block->next = Rover->next->next;
+                        Rover->next = inserted_block;
+                    }
+                }
+            break;
+            }
+            Rover = Rover->next;
+        }while(Rover != original_rover_position);
     }
     custom_validate();
 }
@@ -175,7 +208,6 @@ void *Mem_alloc(const int nbytes)
        mem_chunk_t *original_rover_position = Rover;
        while(Rover->next != original_rover_position)
        {
-        int i = Rover->next->size_units;
             if(Rover->next->size_units >= nbytes/sizeof(mem_chunk_t))
             {
                 /* Context for Splice_block
@@ -252,8 +284,8 @@ void Mem_print(void)
 {
     // note position of Rover is not changed by this function
     assert(Rover != NULL && Rover->next != NULL);
-    mem_chunk_t *p = Rover;
-    mem_chunk_t *start = p;
+    //mem_chunk_t *p = Rover;
+    //mem_chunk_t *start = p;
     /*do {
         // example format.  Modify for your design
         printf("p=%p, size=%d (units), end=%p, next=%p %s\n", 
