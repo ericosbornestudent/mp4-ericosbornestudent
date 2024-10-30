@@ -231,6 +231,41 @@ void *Mem_alloc(const int nbytes)
 
         // run the function again now that there is adequate space on the freelist
         return Mem_alloc(nbytes);
+    }else{
+        /*Background
+            This is the best fit case which means we will find a block
+            as close to ours as possible even if it means scanning the entire list
+        */
+       mem_chunk_t *original_rover_position = Rover;
+       mem_chunk_t *best_fit_block = NULL;
+       mem_chunk_t *block_before_best_fit_block = NULL;
+       int best_size = 10000000;
+       do{
+            if((Rover->next->size_units > nbytes/sizeof(mem_chunk_t)) && Rover->next->size_units < best_size)
+            {
+                best_fit_block = Rover->next;
+                block_before_best_fit_block = Rover;
+                best_size = best_fit_block->size_units;
+            }
+            Rover = Rover->next;
+       }while(Rover->next != original_rover_position);
+
+       if(best_fit_block == NULL)
+       {
+        // this means that we couldnt find a suitable block so well need to request one
+        int newbytes = ((nbytes / PAGESIZE) + 1) * PAGESIZE;
+        assert(newbytes % PAGESIZE == 0);
+        mem_chunk_t *requested_block = morecore(newbytes);
+        requested_block->size_units = newbytes/sizeof(mem_chunk_t);
+        Mem_free((void*)requested_block+sizeof(mem_chunk_t));
+        // run the function again now that there is adequate space on the freelist
+        return Mem_alloc(nbytes);
+
+       }else{
+        // now that we have an ideal block lets splice it
+        Rover = block_before_best_fit_block;
+        return Splice_block(nbytes);
+       }
     }
 
     // the program should never reach here if it does it has failed
