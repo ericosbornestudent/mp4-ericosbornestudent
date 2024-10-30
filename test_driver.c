@@ -224,209 +224,23 @@ int main(int argc, char **argv)
 
         printf("\n----- End unit test driver 2 -----\n");
     }
+    else if (dprms.UnitDriver == 3)
+    {
+        printf("Begining custom test:\n");
+        // string testing
+        int len = 100;
+        char *string = (char *) Mem_alloc((len+1) * sizeof(char));
+        string = "hello world";
+        Mem_free(string);
+        string = NULL;
+    }
 
 
-    // add your unit test drivers here to test for special cases such as
-    //   -- request the number of bytes that matches a whole page, and a 
-    //      size that is one unit smaller and one unit larger than a page
-    //   -- request more bytes than in one page
-    //   -- combinations of requests and frees such that the free list is empty
-    //   -- demonstrate all patterns in coalescing
-    //   -- show that rover spreads allocatins in list and does not cluster
-    //      fragments at head of the free list
-
-    printf("Begining custom test:\n");
-    // string testing
-    int len = 100;
-    char *string = (char *) Mem_alloc((len+1) * sizeof(char));
-    string = "hello world";
-    Mem_free(string);
-    string = NULL;
-
-
-
-
-
-
-
-    // test for performance in equilibrium 
+    // performance test
     if (dprms.EquilibriumTest)
         equilibriumDriver(&dprms);
 
     exit(0);
-}
-
-/* ----- equilibriumDriver -----
- *
- * This is a driver to test the performance of the dynamic memory allocation
- * and free calls in equilibrium.  This code assumes that the functions are
- * defined in mem.h 
- *
- * The driver allocates dynamic memory for variable sized arrays of integers.
- * The size of an array is uniformly distributed in the range [avg-range,
- * avg+range].  The average size and range can be specified on the command
- * line.
- *
- * During a warmup phase, calls are made to allocate the integer arrays and
- * the arrays are stored in an unsorted list using the linked_list.c module.  
- *
- * During the equilibrium phase, the code randomly chooses to either allocate a
- * new array, or return one of the arrays stored in the list.  The events are
- * equally likely.  If an array is removed from the list and freed, one of the
- * list items is choosen with an equal probability over all items in the list.
- *
- * Finally, the last phase frees all arrays stored in the list.
- *
- * At the end of each phase, Mem_stats is called to print information about
- * the size of the free list.  In verbose mode, Mem_print is called to print
- * the address and size of each item in the free list.  Only enable verbose
- * mode when testing with small warmup and trial phases.
- *
- * The following parameters can be set on the command line.  If not set,
- * default values are used.
- *
- * -w 1000   number of warmup allocations
- * -t 100000 number of trials in equilibrium
- * -a 128    average size of interger array
- * -r 127    range for average size of interger array
- * -d        use system malloc/free instead of MP4 versions
- */
-void equilibriumDriver(driver_params *ep)
-{
-    int i, index;
-    int range_num_ints;
-    int min_num_ints;
-    int *ptr;
-    int size;
-    int pos;
-    linked_list_t *mem_list;
-    clock_t start, end;
-
-    // print parameters for this test run 
-    printf("\nEquilibrium test driver using ");
-    if (ep->SysMalloc)
-        printf("system malloc and free\n");
-    else
-        printf("Mem_alloc and Mem_free from mem.c\n");
-    printf("  Trials in equilibrium: %d\n", ep->Trials);
-    printf("  Warmup allocations: %d\n", ep->WarmUp);
-    printf("  Average array size: %d\n", ep->AvgNumInts);
-    printf("  Range for average array size: %d\n", ep->RangeInts);
-
-    mem_list = linked_list_construct(NULL);
-    // the size of the integer array is uniformly distributed in the range
-    // [avg-range, avg+range]
-
-    range_num_ints = 2 * ep->RangeInts + 1;
-    min_num_ints = ep->AvgNumInts - ep->RangeInts;
-    if (min_num_ints < 1 || ep->AvgNumInts < 1 || ep->RangeInts < 0) {
-        printf("The average array size must be positive and greater than the range\n");
-        exit(1);
-    }
-
-    // warmup by allocating memory and storing in list 
-    for (i = 0; i < ep->WarmUp; i++) {
-        // random size of array 
-        size = ((int) (drand48() * range_num_ints)) + min_num_ints;
-        if (ep->SysMalloc)
-            ptr = (int *) malloc(size * sizeof(int));
-        else
-            ptr = (int *) Mem_alloc(size * sizeof(int));
-        assert(ptr != NULL);
-        // first position is size of array.  fill rest with numbers 
-        // for some reason I cant write to this address
-        ptr[0] = 1;
-        ptr[0] = -size;
-        for (index = 1; index < size; index++)
-            ptr[index] = -index;   // same as *(ptr+index)=index 
-        linked_list_insert(mem_list, (mydata_t *) ptr, LLIST_BACK);
-        ptr = NULL;
-    }
-    printf("After warmup\n");
-    if (!ep->SysMalloc) {
-        Mem_stats();
-        if (ep->Verbose) Mem_print();
-    } 
-
-    // in equilibrium make allocations and frees with equal probability 
-    start = clock();
-    for (i = 0; i < ep->Trials; i++) {
-        if (drand48() < 0.5) {
-            size = ((int) (drand48() * range_num_ints)) + min_num_ints;
-            if (ep->Verbose) {
-                // uncomment following print for more detail
-                printf("  list before allocation of size %d\n", size); 
-                Mem_print();
-            }
-            if (ep->SysMalloc)
-                ptr = (int *) malloc(size * sizeof(int));
-            else
-                ptr = (int *) Mem_alloc(size * sizeof(int));
-
-
-                
-            assert(ptr != NULL);
-            ptr[0] = -size;
-            for (index = 1; index < size; index++)
-                ptr[index] = -index;
-            linked_list_insert(mem_list, (mydata_t *) ptr, LLIST_BACK);
-            ptr = NULL;
-        } else if (linked_list_count(mem_list) > 0) {
-            pos = (int) (drand48() * linked_list_count(mem_list));
-            ptr = (int *) linked_list_remove(mem_list, pos);
-            assert(ptr != NULL);
-            size = -ptr[0];
-            if (ep->Verbose) {
-                // uncomment following print for more detail
-                printf("  list before freeing block with size %d from position %d\n", size, pos); 
-                Mem_print();
-            }
-            assert(min_num_ints <= size && size <= ep->AvgNumInts+ep->RangeInts);
-            for (index = 1; index < size; index++)
-                if(ptr[index] != -index)
-                {
-                    printf("%d %d %d", ptr[index], index, size);
-                    exit(0);
-                }
-            if (ep->SysMalloc)
-                free(ptr);
-            else
-                Mem_free(ptr);
-            ptr = NULL;
-        }
-    }
-    end = clock();
-    printf("After exercise, time=%g\n",
-            1000*((double)(end-start))/CLOCKS_PER_SEC);
-    if (!ep->SysMalloc) {
-        Mem_stats();
-        if (ep->Verbose) Mem_print();
-    } 
-
-    // remove and free all items from mem_list
-    pos = linked_list_count(mem_list);
-    for (i = 0; i < pos; i++) {
-        ptr = (int *) linked_list_remove(mem_list, 0);
-        assert(ptr != NULL);
-        size = -ptr[0];
-        assert(min_num_ints <= size && size <= ep->AvgNumInts+ep->RangeInts);
-        for (index = 1; index < size; index++)
-            assert(ptr[index] == -index);
-        if (ep->SysMalloc)
-            free(ptr);
-        else
-            Mem_free(ptr);
-        ptr = NULL;
-    }
-    assert(linked_list_count(mem_list) == 0);
-    linked_list_destruct(mem_list);
-
-    printf("After cleanup\n");
-    if (!ep->SysMalloc) {
-        Mem_stats();
-        if (ep->Verbose) Mem_print();
-    } 
-    printf("----- End of equilibrium test -----\n\n");
 }
 
 

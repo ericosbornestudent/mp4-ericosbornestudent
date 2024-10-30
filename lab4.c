@@ -273,6 +273,16 @@ int main(int argc, char **argv)
 
         printf("\n----- End unit test driver 2 -----\n");
     }
+    else if (dprms.UnitDriver == 3)
+    {
+        // string testing
+        char *string;
+        const char msg[] = "longing universe alpha";
+        int len = strlen(msg);
+        string = (char *) Mem_alloc((len+1) * sizeof(char));
+        Mem_free(string);
+        Mem_stats();
+    }
 
 
     // add your unit test drivers here to test for special cases such as
@@ -399,7 +409,7 @@ void equilibriumDriver(driver_params *ep)
                 ptr = (int *) Mem_alloc(size * sizeof(int));
 
 
-                
+
             assert(ptr != NULL);
             ptr[0] = -size;
             for (index = 1; index < size; index++)

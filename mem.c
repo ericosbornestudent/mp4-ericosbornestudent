@@ -27,6 +27,7 @@ static int NumSbrkCalls = 0;
 // private function prototypes
 void mem_validate(void);
 void custom_validate(void);
+void Leak_check(void);
 
 /* function to request 1 or more pages from the operating system.
  *
@@ -84,6 +85,7 @@ void Mem_configure(int coalescing_state, int search_type)
  */
 void Mem_free(void *return_ptr)
 {
+    
     // precondition
     assert(Rover != NULL && Rover->next != NULL);
 
@@ -94,7 +96,7 @@ void Mem_free(void *return_ptr)
             Here we dont want to do that so we can just add the block of memory
             dirrectly back into some random point on the free list
         */
-       mem_chunk_t *previous_rover_next = Rover->next->next;
+       mem_chunk_t *previous_rover_next = Rover->next;
        mem_chunk_t *return_ptr_chunk = (void*)return_ptr - sizeof(mem_chunk_t);
        Rover->next = return_ptr_chunk;
        return_ptr_chunk->next = previous_rover_next;
@@ -137,6 +139,7 @@ void Mem_free(void *return_ptr)
         }while(Rover != original_rover_position);
     }
     custom_validate();
+    
 }
 
 /* Context for Splice_block
@@ -147,6 +150,7 @@ void Mem_free(void *return_ptr)
 void *Splice_block(const int nbytes)
 {
     custom_validate();
+    
     assert(Rover != NULL);
     // requested memory plus one for the unit header
     int requested_units = (nbytes/sizeof(mem_chunk_t)) + 1;
@@ -170,6 +174,7 @@ void *Splice_block(const int nbytes)
         assert((p->size_units-1)*sizeof(mem_chunk_t) < nbytes + sizeof(mem_chunk_t));
         //assert(p->next == NULL);  // saftey first!
         custom_validate();
+        
         return (void*)p+sizeof(mem_chunk_t);
     }
 
@@ -191,6 +196,7 @@ void *Splice_block(const int nbytes)
     assert((p->size_units-1)*sizeof(mem_chunk_t) < nbytes + sizeof(mem_chunk_t));
     assert(p->next == NULL);  // saftey first!
     custom_validate();
+    
     return (void*)p+sizeof(mem_chunk_t);
 }
 
@@ -202,7 +208,7 @@ void *Splice_block(const int nbytes)
  */
 void *Mem_alloc(const int nbytes)
 {
-
+    
     int nunits = nbytes/sizeof(mem_chunk_t) + 1;
     if(nbytes % sizeof(mem_chunk_t) != 0) nunits++;
 
@@ -229,6 +235,7 @@ void *Mem_alloc(const int nbytes)
                     It peforms all the necessary asserts and returns the user's writable
                     block of memory
                 */
+               
                 return Splice_block(nbytes);
             }
             Rover = Rover->next;
@@ -244,7 +251,7 @@ void *Mem_alloc(const int nbytes)
         mem_chunk_t *requested_block = morecore(newbytes);
         requested_block->size_units = newbytes/sizeof(mem_chunk_t);
         Mem_free((void*)requested_block+sizeof(mem_chunk_t));
-
+        
         // run the function again now that there is adequate space on the freelist
         return Mem_alloc(nbytes);
     }else{
@@ -252,6 +259,7 @@ void *Mem_alloc(const int nbytes)
             This is the best fit case which means we will find a block
             as close to ours as possible even if it means scanning the entire list
         */
+       
        mem_chunk_t *original_rover_position = Rover;
        mem_chunk_t *best_fit_block = NULL;
        mem_chunk_t *block_before_best_fit_block = NULL;
@@ -279,6 +287,7 @@ void *Mem_alloc(const int nbytes)
         requested_block->size_units = newbytes/sizeof(mem_chunk_t);
         Mem_free((void*)requested_block+sizeof(mem_chunk_t));
         // run the function again now that there is adequate space on the freelist
+        
         return Mem_alloc(nbytes);
 
        }else{
@@ -286,6 +295,7 @@ void *Mem_alloc(const int nbytes)
         Rover = block_before_best_fit_block;
         custom_validate();
         return Splice_block(nbytes);
+        
        }
     }
 
@@ -330,6 +340,8 @@ void Mem_stats(void)
     if(items_in_free_list-1 != 0){
     average_block_size = bytes_in_free_list/(items_in_free_list-1);}
 
+    if(min_block_size == INT_MAX) min_block_size = 0;
+
     printf("  --- Free list stats ---\n");
     printf("\tCount of items : %d\n", items_in_free_list);
     printf("\tMemory in list : %d (bytes)\n", bytes_in_free_list);
@@ -339,13 +351,41 @@ void Mem_stats(void)
     printf("\tCalls to sbrk  : %d\n", NumSbrkCalls);
     printf("\tNumber of pages: %d\n", NumPages);
     if (bytes_in_free_list == NumPages * PAGESIZE) {
-        printf("  all memory is in the heap -- no leaks are possible\n");
+        printf("  all memory is in the heap -- no leaks are possible\n\n\n\n\n\n\n");
+    }else{
+        printf("LEAKING DATA:\n%d bytes in freelist while %d bytes were allocated\n",bytes_in_free_list,(NumPages*PAGESIZE));
     }
     // if list is empty then just one item in the list.  It is the dummy
     // So min is zero by default.  Do not consider dummy in avg/min/max.
     assert(min_block_size > 0 || items_in_free_list == 1);
 }
 
+void Leak_check(void)
+{
+    int items_in_free_list = 1;   // count how many blocks are in the free list including dummy
+    int bytes_in_free_list = 0;
+    //double average_block_size = 0; // do not include dummy for avg/min/max
+    int min_block_size = INT_MAX;
+    int max_block_size = 0;
+
+    mem_chunk_t *original_rover_position = Rover;
+    while(Rover->next != original_rover_position)
+    {
+        items_in_free_list++;
+        bytes_in_free_list+=(Rover->next->size_units * sizeof(mem_chunk_t));
+        if(Rover->next->size_units < min_block_size && Rover->next->size_units != 0)
+        {
+            min_block_size = Rover->next->size_units;
+        }
+        if(Rover->next->size_units > max_block_size)
+        {
+            max_block_size = Rover->next->size_units;
+        }
+        Rover = Rover->next;
+    }
+
+    assert(bytes_in_free_list != NumPages * PAGESIZE);
+}
 /* print table of memory in free list 
  *
  * The print should include the dummy item in the list 
