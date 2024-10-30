@@ -58,7 +58,7 @@ mem_chunk_t *morecore(int new_bytes)
     NumPages += new_bytes/PAGESIZE;
 
     // i did that!!
-    new_p->size_units = new_bytes/sizeof(mem_chunk_t) + 1;
+    new_p->size_units = new_bytes/sizeof(mem_chunk_t);
     return new_p;
 }
 
@@ -105,9 +105,8 @@ void Mem_free(void *return_ptr)
         // step 1: loop to find before and after location
         mem_chunk_t *original_rover_position = Rover;
         mem_chunk_t *inserted_block = (void*)return_ptr - sizeof(mem_chunk_t);
-        Rover = Rover->next;
         do{
-            if(Rover <= inserted_block && (inserted_block < Rover->next || Rover->size_units == 0))
+            if(Rover <= inserted_block && (inserted_block < Rover->next || Rover->next->size_units == 0))
             {
                 // step 2: insert between before and after and coalesce if possible
                 // check if we can combine with the left block
@@ -129,7 +128,7 @@ void Mem_free(void *return_ptr)
                         Rover->next = inserted_block;
                     }else{
                         // this means we couldn't combine any blocks so we just insert it in the lsit
-                        inserted_block->next = Rover->next->next;
+                        inserted_block->next = Rover->next;
                         Rover->next = inserted_block;
                     }
                 }
@@ -147,15 +146,13 @@ void Mem_free(void *return_ptr)
     It peforms all the necessary asserts and returns the user's writable
     block of memory
 */
-void *Splice_block(const int nbytes)
+void *Splice_block(const int nunits)
 {
     custom_validate();
     
     assert(Rover != NULL);
     // requested memory plus one for the unit header
-    int requested_units = (nbytes/sizeof(mem_chunk_t)) + 1;
-    // round up
-    if(nbytes % sizeof(mem_chunk_t) != 0) requested_units++;
+    int requested_units = nunits;
 
     // Exact match case:
     if(Rover->next->size_units == requested_units)
@@ -170,8 +167,8 @@ void *Splice_block(const int nbytes)
         // NULL next of return as it is good practice
         //p->next = NULL;
 
-        assert((p->size_units-1)*sizeof(mem_chunk_t) >= nbytes);
-        assert((p->size_units-1)*sizeof(mem_chunk_t) < nbytes + sizeof(mem_chunk_t));
+        //assert((p->size_units-1)*sizeof(mem_chunk_t) >= nbytes);
+        //assert((p->size_units-1)*sizeof(mem_chunk_t) < nbytes + sizeof(mem_chunk_t));
         //assert(p->next == NULL);  // saftey first!
         custom_validate();
         
@@ -192,8 +189,8 @@ void *Splice_block(const int nbytes)
     mem_chunk_t *p = new_block;
     p->next = NULL;
 
-    assert((p->size_units-1)*sizeof(mem_chunk_t) >= nbytes);
-    assert((p->size_units-1)*sizeof(mem_chunk_t) < nbytes + sizeof(mem_chunk_t));
+    //assert((p->size_units-1)*sizeof(mem_chunk_t) >= nbytes);
+    //assert((p->size_units-1)*sizeof(mem_chunk_t) < nbytes + sizeof(mem_chunk_t));
     assert(p->next == NULL);  // saftey first!
     custom_validate();
     
@@ -224,22 +221,21 @@ void *Mem_alloc(const int nbytes)
             For best fit we find the block of memory that closest fits our
             For each method you need to splice the block if its too big
         */
-
-       mem_chunk_t *original_rover_position = Rover;
-       while(Rover->next != original_rover_position)
-       {
-            if(Rover->next->size_units >= nunits)
+        mem_chunk_t *original_rover_position = Rover;
+       do{
+            if(Rover->size_units >= nunits)
             {
                 /* Context for Splice_block
                     This function splices the block if needed and alters the freelist
                     It peforms all the necessary asserts and returns the user's writable
                     block of memory
                 */
-               
-                return Splice_block(nbytes);
+                Rover = Rover->next;
+                return Splice_block(nunits);
             }
             Rover = Rover->next;
-       }
+       }while(Rover != original_rover_position);
+
        /*
             If it gets here it can be assumed that there is not a suitable block on
             the free list. As such we will request a new block with morecore.
@@ -294,7 +290,7 @@ void *Mem_alloc(const int nbytes)
         // now that we have an ideal block lets splice it
         Rover = block_before_best_fit_block;
         custom_validate();
-        return Splice_block(nbytes);
+        return Splice_block(nunits);
         
        }
     }
@@ -323,20 +319,21 @@ void Mem_stats(void)
     int max_block_size = 0;
 
     mem_chunk_t *original_rover_position = Rover;
-    while(Rover->next != original_rover_position)
-    {
+    
+    do{
         items_in_free_list++;
-        bytes_in_free_list+=(Rover->next->size_units * sizeof(mem_chunk_t));
-        if(Rover->next->size_units < min_block_size && Rover->next->size_units != 0)
+        bytes_in_free_list+=(Rover->size_units * sizeof(mem_chunk_t));
+        if(Rover->size_units < min_block_size && Rover->size_units != 0)
         {
-            min_block_size = Rover->next->size_units;
+            min_block_size = Rover->size_units;
         }
-        if(Rover->next->size_units > max_block_size)
+        if(Rover->size_units > max_block_size)
         {
-            max_block_size = Rover->next->size_units;
+            max_block_size = Rover->size_units;
         }
         Rover = Rover->next;
-    }
+    }while(Rover != original_rover_position);
+
     if(items_in_free_list-1 != 0){
     average_block_size = bytes_in_free_list/(items_in_free_list-1);}
 
@@ -354,6 +351,18 @@ void Mem_stats(void)
         printf("  all memory is in the heap -- no leaks are possible\n\n\n\n\n\n\n");
     }else{
         printf("LEAKING DATA:\n%d bytes in freelist while %d bytes were allocated\n",bytes_in_free_list,(NumPages*PAGESIZE));
+        if(SearchPolicy == FIRST_FIT)
+        { 
+            printf("While searching with First Fit\n");
+        }else{
+            printf("While searching with Best Fit\n");
+        }
+        if(Coalescing)
+        {
+            printf("While also Coalescing\n");
+        }else{
+            printf("While NOT Coalescing\n");
+        }
     }
     // if list is empty then just one item in the list.  It is the dummy
     // So min is zero by default.  Do not consider dummy in avg/min/max.
