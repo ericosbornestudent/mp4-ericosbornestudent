@@ -145,8 +145,15 @@ void Mem_free(void *return_ptr)
 */
 void *Splice_block(const int nbytes)
 {
+    custom_validate();
+    assert(Rover != NULL);
+    // requested memory plus one for the unit header
+    int requested_units = (nbytes/sizeof(mem_chunk_t)) + 1;
+    // round up
+    if(nbytes % sizeof(mem_chunk_t) != 0) requested_units++;
+
     // Exact match case:
-    if((Rover->next->size_units*sizeof(mem_chunk_t)) == nbytes+sizeof(mem_chunk_t))
+    if(Rover->next->size_units == requested_units)
     {
     // This is an exact match which means remove the entire block from the list
         mem_chunk_t *p = Rover->next;
@@ -160,19 +167,19 @@ void *Splice_block(const int nbytes)
         assert((p->size_units-1)*sizeof(mem_chunk_t) >= nbytes);
         assert((p->size_units-1)*sizeof(mem_chunk_t) < nbytes + sizeof(mem_chunk_t));
         assert(p->next == NULL);  // saftey first!
-
+        custom_validate();
         return (void*)p+sizeof(mem_chunk_t);
     }
 
     // Splice block case:
     mem_chunk_t *original_block = Rover->next;
     
-    // Alter the size of the block
-    mem_chunk_t *new_block = (void*)original_block + (original_block->size_units * sizeof(mem_chunk_t)) - nbytes - sizeof(mem_chunk_t);
-    original_block->size_units = original_block->size_units - (nbytes/sizeof(mem_chunk_t)) - 1;
+    // Splice the block creating a new one
+    mem_chunk_t *new_block = (void*)original_block + original_block->size_units*sizeof(mem_chunk_t)-requested_units*sizeof(mem_chunk_t);
+    original_block->size_units = original_block->size_units - requested_units;
     
     // size of newblock = how many bytes were requested + the header
-    new_block->size_units = nbytes/sizeof(mem_chunk_t) + 1;
+    new_block->size_units = requested_units;
 
     mem_chunk_t *p = new_block;
     p->next = NULL;
@@ -192,6 +199,10 @@ void *Splice_block(const int nbytes)
  */
 void *Mem_alloc(const int nbytes)
 {
+
+    int nunits = nbytes/sizeof(mem_chunk_t) + 1;
+    if(nbytes % sizeof(mem_chunk_t) != 0) nunits++;
+
     // precondition
     mem_validate();
     assert(nbytes > 0);
@@ -204,10 +215,11 @@ void *Mem_alloc(const int nbytes)
             For best fit we find the block of memory that closest fits our
             For each method you need to splice the block if its too big
         */
+
        mem_chunk_t *original_rover_position = Rover;
        while(Rover->next != original_rover_position)
        {
-            if(Rover->next->size_units >= nbytes/sizeof(mem_chunk_t) + 1)
+            if(Rover->next->size_units >= nunits)
             {
                 /* Context for Splice_block
                     This function splices the block if needed and alters the freelist
@@ -222,9 +234,6 @@ void *Mem_alloc(const int nbytes)
             If it gets here it can be assumed that there is not a suitable block on
             the free list. As such we will request a new block with morecore.
        */
-        int nunits = nbytes/sizeof(mem_chunk_t) + 1;
-        if(nbytes % sizeof(mem_chunk_t) != 0) nunits++;
-
         int newbytes = (((nunits * sizeof(mem_chunk_t)) / PAGESIZE) + ((nunits * sizeof(mem_chunk_t)) % PAGESIZE != 0)) * PAGESIZE; 
 
 
@@ -243,9 +252,9 @@ void *Mem_alloc(const int nbytes)
        mem_chunk_t *original_rover_position = Rover;
        mem_chunk_t *best_fit_block = NULL;
        mem_chunk_t *block_before_best_fit_block = NULL;
-       int best_size = 10000000;
+       int best_size = INT_MAX;
        do{
-            if((Rover->next->size_units > nbytes/sizeof(mem_chunk_t) + 1) && Rover->next->size_units < best_size)
+            if((Rover->next->size_units >= nunits) && Rover->next->size_units < best_size)
             {
                 best_fit_block = Rover->next;
                 block_before_best_fit_block = Rover;
