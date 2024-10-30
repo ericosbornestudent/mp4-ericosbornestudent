@@ -55,6 +55,9 @@ mem_chunk_t *morecore(int new_bytes)
     // pages that have been requested
     NumSbrkCalls++; 
     NumPages += new_bytes/PAGESIZE;
+
+    // i did that!!
+    new_p->size_units = new_bytes/sizeof(mem_chunk_t);
     return new_p;
 }
 
@@ -158,7 +161,8 @@ void *Splice_block(const int nbytes)
         assert((p->size_units-1)*sizeof(mem_chunk_t) < nbytes + sizeof(mem_chunk_t));
         assert(p->next == NULL);  // saftey first!
         custom_validate();
-        return p+sizeof(mem_chunk_t);
+        
+        return (void*)p+sizeof(mem_chunk_t);
     }
 
     // Splice block case:
@@ -175,14 +179,12 @@ void *Splice_block(const int nbytes)
     p->next = NULL;
 
     // so the problem is that p is still part of the list some how
- 
-    
     custom_validate();
     assert((p->size_units-1)*sizeof(mem_chunk_t) >= nbytes);
     assert((p->size_units-1)*sizeof(mem_chunk_t) < nbytes + sizeof(mem_chunk_t));
     assert(p->next == NULL);  // saftey first!
     custom_validate();
-    return p+sizeof(mem_chunk_t);
+    return (void*)p+sizeof(mem_chunk_t);
 }
 
 /* returns a pointer to space for an object of size nbytes, or NULL if the
@@ -285,11 +287,29 @@ void *Mem_alloc(const int nbytes)
  */
 void Mem_stats(void)
 {
-    int items_in_free_list = 0;   // count how many blocks are in the free list including dummy
+    custom_validate();
+    int items_in_free_list = 1;   // count how many blocks are in the free list including dummy
     int bytes_in_free_list = 0;
     double average_block_size = 0; // do not include dummy for avg/min/max
     int min_block_size = INT_MAX;
     int max_block_size = 0;
+
+    mem_chunk_t *original_rover_position = Rover;
+    while(Rover->next != original_rover_position)
+    {
+        items_in_free_list++;
+        bytes_in_free_list+=(Rover->next->size_units * sizeof(mem_chunk_t));
+        if(Rover->next->size_units < min_block_size && Rover->next->size_units != 0)
+        {
+            min_block_size = Rover->next->size_units;
+        }
+        if(Rover->next->size_units > max_block_size)
+        {
+            max_block_size = Rover->next->size_units;
+        }
+        Rover = Rover->next;
+    }
+    average_block_size = bytes_in_free_list/(items_in_free_list-1);
 
     printf("\n\tthe student must implement mem stats.  When done delete this line\n\n");
 
@@ -319,16 +339,15 @@ void Mem_print(void)
 {
     // note position of Rover is not changed by this function
     assert(Rover != NULL && Rover->next != NULL);
-    //mem_chunk_t *p = Rover;
-    //mem_chunk_t *start = p;
-    /*do {
+    mem_chunk_t *p = Rover;
+    mem_chunk_t *start = p;
+    do {
         // example format.  Modify for your design
         printf("p=%p, size=%d (units), end=%p, next=%p %s\n", 
                 p, p->size_units, p + p->size_units, p->next, 
                 p->size_units!=0?"":"<-- dummy");
         p = p->next;
-    } while (p != start);*/
-    mem_validate();
+    } while (p != start);
 }
 
 void custom_validate(void)
@@ -337,7 +356,16 @@ void custom_validate(void)
     Rover = Rover->next;
     while(Rover != original_rover_position)
     {
-        if(Rover->size_units == 420) break;
+        // check that each block has initiated values
+        if(Rover->size_units == -420) break;
+        if(Rover->next == -420) break;
+
+        // verify that the list is in proper order
+        if(Coalescing == TRUE)
+        {
+            
+        }
+
         Rover = Rover->next;
     }
 }

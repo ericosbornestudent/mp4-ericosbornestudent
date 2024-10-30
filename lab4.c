@@ -369,6 +369,9 @@ void equilibriumDriver(driver_params *ep)
             ptr = (int *) Mem_alloc(size * sizeof(int));
         assert(ptr != NULL);
         // first position is size of array.  fill rest with numbers 
+        // for some reason I cant write to this address
+        ptr = 1;
+        ptr[0] = 1;
         ptr[0] = -size;
         for (index = 1; index < size; index++)
             ptr[index] = -index;   // same as *(ptr+index)=index 
