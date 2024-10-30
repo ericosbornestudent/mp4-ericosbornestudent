@@ -57,7 +57,7 @@ mem_chunk_t *morecore(int new_bytes)
     NumPages += new_bytes/PAGESIZE;
 
     // i did that!!
-    new_p->size_units = new_bytes/sizeof(mem_chunk_t);
+    new_p->size_units = new_bytes/sizeof(mem_chunk_t) + 1;
     return new_p;
 }
 
@@ -146,9 +146,9 @@ void Mem_free(void *return_ptr)
 void *Splice_block(const int nbytes)
 {
     // Exact match case:
-    if(Rover->next->size_units == nbytes/sizeof(mem_chunk_t)+1)
+    if((Rover->next->size_units*sizeof(mem_chunk_t)) == nbytes+sizeof(mem_chunk_t))
     {
-        // This is an exact match which means remove the entire block from the list
+    // This is an exact match which means remove the entire block from the list
         mem_chunk_t *p = Rover->next;
 
         // remove p from list
@@ -160,26 +160,23 @@ void *Splice_block(const int nbytes)
         assert((p->size_units-1)*sizeof(mem_chunk_t) >= nbytes);
         assert((p->size_units-1)*sizeof(mem_chunk_t) < nbytes + sizeof(mem_chunk_t));
         assert(p->next == NULL);  // saftey first!
-        custom_validate();
-        
+
         return (void*)p+sizeof(mem_chunk_t);
     }
 
     // Splice block case:
     mem_chunk_t *original_block = Rover->next;
-    custom_validate();
+    
     // Alter the size of the block
     mem_chunk_t *new_block = (void*)original_block + (original_block->size_units * sizeof(mem_chunk_t)) - nbytes - sizeof(mem_chunk_t);
     original_block->size_units = original_block->size_units - (nbytes/sizeof(mem_chunk_t)) - 1;
     
     // size of newblock = how many bytes were requested + the header
     new_block->size_units = nbytes/sizeof(mem_chunk_t) + 1;
-    custom_validate();
+
     mem_chunk_t *p = new_block;
     p->next = NULL;
 
-    // so the problem is that p is still part of the list some how
-    custom_validate();
     assert((p->size_units-1)*sizeof(mem_chunk_t) >= nbytes);
     assert((p->size_units-1)*sizeof(mem_chunk_t) < nbytes + sizeof(mem_chunk_t));
     assert(p->next == NULL);  // saftey first!
@@ -210,7 +207,7 @@ void *Mem_alloc(const int nbytes)
        mem_chunk_t *original_rover_position = Rover;
        while(Rover->next != original_rover_position)
        {
-            if(Rover->next->size_units >= nbytes/sizeof(mem_chunk_t))
+            if(Rover->next->size_units >= nbytes/sizeof(mem_chunk_t) + 1)
             {
                 /* Context for Splice_block
                     This function splices the block if needed and alters the freelist
@@ -225,7 +222,12 @@ void *Mem_alloc(const int nbytes)
             If it gets here it can be assumed that there is not a suitable block on
             the free list. As such we will request a new block with morecore.
        */
-        int newbytes = ((nbytes / PAGESIZE) + 1) * PAGESIZE;
+        int nunits = nbytes/sizeof(mem_chunk_t) + 1;
+        if(nbytes % sizeof(mem_chunk_t) != 0) nunits++;
+
+        int newbytes = (((nunits * sizeof(mem_chunk_t)) / PAGESIZE) + ((nunits * sizeof(mem_chunk_t)) % PAGESIZE != 0)) * PAGESIZE; 
+
+
         assert(newbytes % PAGESIZE == 0);
         mem_chunk_t *requested_block = morecore(newbytes);
         requested_block->size_units = newbytes/sizeof(mem_chunk_t);
@@ -243,7 +245,7 @@ void *Mem_alloc(const int nbytes)
        mem_chunk_t *block_before_best_fit_block = NULL;
        int best_size = 10000000;
        do{
-            if((Rover->next->size_units > nbytes/sizeof(mem_chunk_t)) && Rover->next->size_units < best_size)
+            if((Rover->next->size_units > nbytes/sizeof(mem_chunk_t) + 1) && Rover->next->size_units < best_size)
             {
                 best_fit_block = Rover->next;
                 block_before_best_fit_block = Rover;
@@ -255,8 +257,16 @@ void *Mem_alloc(const int nbytes)
        if(best_fit_block == NULL)
        {
         // this means that we couldnt find a suitable block so well need to request one
-        int newbytes = ((nbytes / PAGESIZE) + 1) * PAGESIZE;
+
+        int nunits = nbytes/sizeof(mem_chunk_t) + 1;
+        if(nbytes % sizeof(mem_chunk_t) != 0) nunits++;
+
+        int newbytes = (
+            ((nunits * sizeof(mem_chunk_t)) / PAGESIZE) 
+            + ((nunits * sizeof(mem_chunk_t)) % PAGESIZE != 0)) * PAGESIZE; 
+
         assert(newbytes % PAGESIZE == 0);
+
         mem_chunk_t *requested_block = morecore(newbytes);
         requested_block->size_units = newbytes/sizeof(mem_chunk_t);
         Mem_free((void*)requested_block+sizeof(mem_chunk_t));
@@ -287,7 +297,6 @@ void *Mem_alloc(const int nbytes)
  */
 void Mem_stats(void)
 {
-    custom_validate();
     int items_in_free_list = 1;   // count how many blocks are in the free list including dummy
     int bytes_in_free_list = 0;
     double average_block_size = 0; // do not include dummy for avg/min/max
@@ -310,8 +319,6 @@ void Mem_stats(void)
         Rover = Rover->next;
     }
     average_block_size = bytes_in_free_list/(items_in_free_list-1);
-
-    printf("\n\tthe student must implement mem stats.  When done delete this line\n\n");
 
     printf("  --- Free list stats ---\n");
     printf("\tCount of items : %d\n", items_in_free_list);
@@ -358,7 +365,6 @@ void custom_validate(void)
     {
         // check that each block has initiated values
         if(Rover->size_units == -420) break;
-        if(Rover->next == -420) break;
 
         // verify that the list is in proper order
         if(Coalescing == TRUE)

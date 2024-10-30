@@ -1,49 +1,3 @@
-/* lab4.c
- * Lab4: Dynamic Memory Allocation
- * Version: 1
- * ECE 2230, Fall 2024
- *
- * This file contains drivers to test the mem.c package for dynamic memory
- * allocation.
- * 
- * The following parameters can be set on the command line.  If not set,
- * default values are used.  
- *
- * If different options are implemented for the memory package, this provides a
- * simple mechanism to change the options.  
- *
- * -f best|first  search policy to find memory block (first by default)
- * -c             turn on coalescing (off by default)
- *
- * General options for all test drivers
- * -s 10282024 random number generator seed
- * -v         verbose
- *
- * The Unit test drivers.  Three example drivers are provided.  You MUST
- *           add one or more additional unit drivers for more detailed testing
- * 
- * -u 0      Tests one allocation for 16 bytes
- * -u 1      Tests 4 allocations including a new page
- * -u 2      Repeats unit driver 1 with tests for exact and best fit
- *
- * -u ?      The student is REQUIRED to add additional drivers
- *
- * The equilibrium test driver.  See comments with equilibriumDriver below for
- * additional options.
- * -e        run equilibrium test driver
- *
- * To test the equilibrium driver with the system malloc/free instead
- * of your implementation of a heap use the option
- * -d        Use system malloc/free to verify equilibrium dirver and list ADT
- *           work as expected
- *
- * Revisions: Consider changing equilibrium driver to check out smaller than
- *            average block sizes during warmup to create clutter in free list
- *            without coalescing.  And, scale memory block sizes up the longer
- *            the driver runs so that early allocations create more small
- *            blocks.
- */
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -51,7 +5,6 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <time.h>
-
 #include "linked_list_lib.h"
 #include "mem.h"
 
@@ -78,8 +31,6 @@ int main(int argc, char **argv)
 {
     driver_params dprms;
     getCommandLine(argc, argv, &dprms);
-    printf("Seed: %d\n", dprms.Seed);
-    srand48(dprms.Seed);
 
     // The major choices: search policy and coalescing option 
     if (dprms.SearchPolicy == BEST_FIT) printf("Best-fit search policy");
@@ -283,6 +234,20 @@ int main(int argc, char **argv)
     //   -- demonstrate all patterns in coalescing
     //   -- show that rover spreads allocatins in list and does not cluster
     //      fragments at head of the free list
+
+    printf("Begining custom test:\n");
+    // string testing
+    int len = 100;
+    char *string = (char *) Mem_alloc((len+1) * sizeof(char));
+    string = "hello world";
+    Mem_free(string);
+    string = NULL;
+
+
+
+
+
+
 
     // test for performance in equilibrium 
     if (dprms.EquilibriumTest)
