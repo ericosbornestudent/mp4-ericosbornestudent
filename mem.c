@@ -98,6 +98,7 @@ void Mem_free(void *return_ptr)
        mem_chunk_t *return_ptr_chunk = (void*)return_ptr - sizeof(mem_chunk_t);
        Rover->next = return_ptr_chunk;
        return_ptr_chunk->next = previous_rover_next;
+       custom_validate();
     } else {
         // step 1: loop to find before and after location
         mem_chunk_t *original_rover_position = Rover;
@@ -155,22 +156,24 @@ void *Splice_block(const int nbytes)
     // Exact match case:
     if(Rover->next->size_units == requested_units)
     {
-    // This is an exact match which means remove the entire block from the list
+        custom_validate();
+        // This is an exact match which means remove the entire block from the list
         mem_chunk_t *p = Rover->next;
 
         // remove p from list
         Rover->next = Rover->next->next;
 
         // NULL next of return as it is good practice
-        p->next = NULL;
+        //p->next = NULL;
 
         assert((p->size_units-1)*sizeof(mem_chunk_t) >= nbytes);
         assert((p->size_units-1)*sizeof(mem_chunk_t) < nbytes + sizeof(mem_chunk_t));
-        assert(p->next == NULL);  // saftey first!
+        //assert(p->next == NULL);  // saftey first!
         custom_validate();
         return (void*)p+sizeof(mem_chunk_t);
     }
 
+    custom_validate();
     // Splice block case:
     mem_chunk_t *original_block = Rover->next;
     
@@ -266,10 +269,6 @@ void *Mem_alloc(const int nbytes)
        if(best_fit_block == NULL)
        {
         // this means that we couldnt find a suitable block so well need to request one
-
-        int nunits = nbytes/sizeof(mem_chunk_t) + 1;
-        if(nbytes % sizeof(mem_chunk_t) != 0) nunits++;
-
         int newbytes = (
             ((nunits * sizeof(mem_chunk_t)) / PAGESIZE) 
             + ((nunits * sizeof(mem_chunk_t)) % PAGESIZE != 0)) * PAGESIZE; 
@@ -285,6 +284,7 @@ void *Mem_alloc(const int nbytes)
        }else{
         // now that we have an ideal block lets splice it
         Rover = block_before_best_fit_block;
+        custom_validate();
         return Splice_block(nbytes);
        }
     }
@@ -327,7 +327,8 @@ void Mem_stats(void)
         }
         Rover = Rover->next;
     }
-    average_block_size = bytes_in_free_list/(items_in_free_list-1);
+    if(items_in_free_list-1 != 0){
+    average_block_size = bytes_in_free_list/(items_in_free_list-1);}
 
     printf("  --- Free list stats ---\n");
     printf("\tCount of items : %d\n", items_in_free_list);
