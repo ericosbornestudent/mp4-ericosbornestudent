@@ -223,14 +223,13 @@ void *Mem_alloc(const int nbytes)
         */
         mem_chunk_t *original_rover_position = Rover;
        do{
-            if(Rover->size_units >= nunits)
+            if(Rover->next->size_units >= nunits)
             {
                 /* Context for Splice_block
                     This function splices the block if needed and alters the freelist
                     It peforms all the necessary asserts and returns the user's writable
                     block of memory
                 */
-                Rover = Rover->next;
                 return Splice_block(nunits);
             }
             Rover = Rover->next;
@@ -265,10 +264,11 @@ void *Mem_alloc(const int nbytes)
             {
                 best_fit_block = Rover->next;
                 block_before_best_fit_block = Rover;
-                best_size = best_fit_block->size_units;
+                best_size = Rover->next->size_units;
             }
             Rover = Rover->next;
-       }while(Rover->next != original_rover_position);
+
+       }while(Rover != original_rover_position);
 
        if(best_fit_block == NULL)
        {
