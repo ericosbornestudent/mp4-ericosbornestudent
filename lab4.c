@@ -275,15 +275,108 @@ int main(int argc, char **argv)
     }
     else if (dprms.UnitDriver == 3)
     {
-        // string testing
-        char *string;
-        const char msg[] = "longing universe alpha";
-        int len = strlen(msg);
-        string = (char *) Mem_alloc((len+1) * sizeof(char));
-        Mem_free(string);
+        // large scale array testing
+        int length_of_array = 10000;
+        int *test_array1 = (int *) Mem_alloc(length_of_array * sizeof(int));
+        int *test_array2 = (int *) Mem_alloc(length_of_array * sizeof(float));
+        int *test_array3 = (int *) Mem_alloc(length_of_array * sizeof(long));
+
+        int index = 0;
+        for(index = 0; index > length_of_array; index++)
+        {
+            test_array1[index] = index * index;
+        }
+        for(index = 0; index > length_of_array; index++)
+        {
+            test_array2[index] = index * index;
+        }
+        for(index = 0; index > length_of_array; index++)
+        {
+            test_array3[index] = index * index;
+        }
+        Mem_print();
+        Mem_stats();
+        Mem_free(test_array1);
+        Mem_free(test_array2);
+        Mem_free(test_array3);
+        Mem_print();
+        Mem_stats();
+
+    }
+    else if (dprms.UnitDriver == 4)
+    {
+        // Alocate, free, and then reallocate the blocks
+        // This should not require the use of morecore for reallocation
+        // large scale array testing
+        printf("--------Begining Unit Driver 4--------");
+
+        int length_of_array = 10000;
+        int *test_array1 = (int *) Mem_alloc(length_of_array * sizeof(int));
+        int *test_array2 = (int *) Mem_alloc(length_of_array * sizeof(float));
+        int *test_array3 = (int *) Mem_alloc(length_of_array * sizeof(long));
+        test_array1[0] = 1;
+        test_array2[0] = 2;
+        test_array3[0] = 3;
+        Mem_print();
+        Mem_stats();
+
+        printf("Now Free and reallocate\n");
+
+        Mem_free(test_array1);
+        Mem_free(test_array2);
+        Mem_free(test_array3);
+
+        length_of_array = 10000;
+        int *test_array4 = (int *) Mem_alloc(length_of_array * sizeof(int));
+        int *test_array5 = (int *) Mem_alloc(length_of_array * sizeof(float));
+        int *test_array6 = (int *) Mem_alloc(length_of_array * sizeof(long));
+        test_array4[0] = 1;
+        test_array5[0] = 2;
+        test_array6[0] = 3;
+        Mem_free(test_array4);
+        Mem_free(test_array5);
+        Mem_free(test_array6);
+        Mem_print();
+        Mem_stats();
+        printf("--------Unit Driver 4 Complete--------");
+    }
+    else if (dprms.UnitDriver == 5)
+    {
+        // tests on a variety of data types
+
+        // pointer
+        int *int_ptr = (int *) Mem_alloc(sizeof(int));
+        *int_ptr = 1738;
+        Mem_free(int_ptr);
+
+        // float
+        float *float_ptr = (float *) Mem_alloc(sizeof(float));
+        *float_ptr = 123.456f;
+        Mem_free(float_ptr);
+
+        // char
+        char *char_ptr = (char *) Mem_alloc(sizeof(char));
+        *char_ptr = 'q';
+        Mem_free(char_ptr);
+
+        // double
+        double *double_ptr = (double *) Mem_alloc(sizeof(double));
+        *double_ptr = 1.2345;
+        Mem_free(double_ptr);
+
+        // structs
+        typedef struct {
+            int cuid;
+            char name[20];
+        } Student;
+
+        Student *me_ptr = (Student *) Mem_alloc(sizeof(Student));
+        me_ptr->cuid = 123456789;
+        strcpy(me_ptr->name, "Eric Osborne");
+        Mem_free(me_ptr);
+
         Mem_stats();
     }
-
 
     // add your unit test drivers here to test for special cases such as
     //   -- request the number of bytes that matches a whole page, and a 
@@ -293,7 +386,6 @@ int main(int argc, char **argv)
     //   -- demonstrate all patterns in coalescing
     //   -- show that rover spreads allocatins in list and does not cluster
     //      fragments at head of the free list
-
     // test for performance in equilibrium 
     if (dprms.EquilibriumTest)
         equilibriumDriver(&dprms);

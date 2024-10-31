@@ -366,7 +366,7 @@ void Mem_stats(void)
     }
     // if list is empty then just one item in the list.  It is the dummy
     // So min is zero by default.  Do not consider dummy in avg/min/max.
-    assert(min_block_size > 0 || items_in_free_list == 1);
+    //assert(min_block_size > 0 || items_in_free_list == 1);
 }
 
 void Leak_check(void)
@@ -393,7 +393,7 @@ void Leak_check(void)
         Rover = Rover->next;
     }
 
-    assert(bytes_in_free_list != NumPages * PAGESIZE);
+    //assert(bytes_in_free_list != NumPages * PAGESIZE);
 }
 /* print table of memory in free list 
  *

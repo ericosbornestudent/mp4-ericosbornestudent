@@ -1,0 +1,6 @@
+,lab4 –e –w 10 –t 1000 –a 1024 –r 8,lab4 –e –w 10 –t 1000 –a 4096 –r 8,lab4 –e -a 124 –r 0
+First Fit Non Coalescing,7.6,13.724,296.882
+First Fit Coalescing,2.577,5.57,147.305
+Best Fit Non Coalescing,4.4736,6.923,376.755
+Best Fit Coalescing,2.502,5.621,61.749
+System Malloc,2.212,5.7,56.319
